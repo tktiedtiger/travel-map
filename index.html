@@ -38,9 +38,30 @@ function setupCityPicker(id){
 }
 setupCityPicker('from');setupCityPicker('to');
 const rad=Math.PI/180;function gc(a,b){let [p1,l1]=a.map(v=>v*rad),[p2,l2]=b.map(v=>v*rad),v1=[Math.cos(p1)*Math.cos(l1),Math.cos(p1)*Math.sin(l1),Math.sin(p1)],v2=[Math.cos(p2)*Math.cos(l2),Math.cos(p2)*Math.sin(l2),Math.sin(p2)];let dot=Math.max(-1,Math.min(1,v1.reduce((s,v,i)=>s+v*v2[i],0))),ang=Math.acos(dot),out=[];for(let i=0;i<=150;i++){let t=i/150,A=ang<1e-8?1-t:Math.sin((1-t)*ang)/Math.sin(ang),B=ang<1e-8?t:Math.sin(t*ang)/Math.sin(ang),v=v1.map((x,j)=>A*x+B*v2[j]);out.push([Math.atan2(v[2],Math.hypot(v[0],v[1]))/rad,Math.atan2(v[1],v[0])/rad])}return out}
+function routePlanePose(points){
+ const lengths=points.slice(1).map((p,i)=>Math.hypot(p[0]-points[i][0],p[1]-points[i][1]));
+ const total=lengths.reduce((sum,n)=>sum+n,0);if(total<1)return null;
+ let remaining=total*.5;
+ for(let i=0;i<lengths.length;i++){
+  if(!lengths[i])continue;
+  if(remaining<=lengths[i]){const a=points[i],b=points[i+1],t=remaining/lengths[i];return{x:a[0]+(b[0]-a[0])*t,y:a[1]+(b[1]-a[1])*t,angle:Math.atan2(b[1]-a[1],b[0]-a[0])};}
+  remaining-=lengths[i];
+ }
+ return null;
+}
+function drawRoutePlane(pose,dark){
+ if(!pose)return;
+ ctx.save();ctx.translate(pose.x,pose.y);ctx.rotate(pose.angle);
+ ctx.beginPath();
+ const outline=[[27,0],[19,4],[3,4],[-10,23],[-17,23],[-10,4],[-23,4],[-29,11],[-34,11],[-30,0],[-34,-11],[-29,-11],[-23,-4],[-10,-4],[-17,-23],[-10,-23],[3,-4],[19,-4]];
+ outline.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+ ctx.lineJoin='round';ctx.lineWidth=7;ctx.strokeStyle=dark?'#112a41':'#d9edf3';ctx.stroke();
+ ctx.fillStyle=dark?'#ffffff':'#006c88';ctx.fill();ctx.restore();
+}
 function render(){let f=el('from').value.trim(),t=el('to').value.trim(),a=cities[f],b=cities[t];if(!a||!b){el('status').textContent='Please select a valid city from each dropdown.';el('from').setAttribute('aria-invalid',String(!a));el('to').setAttribute('aria-invalid',String(!b));return false}let dark=el('theme').value==='dark',route=gc(a,b),lons=[route[0][1]];for(let i=1;i<route.length;i++){let lon=route[i][1];while(lon-lons[i-1]>180)lon-=360;while(lon-lons[i-1]<-180)lon+=360;lons.push(lon)}let minLon=Math.min(...lons),maxLon=Math.max(...lons),minLat=Math.min(...route.map(p=>p[0])),maxLat=Math.max(...route.map(p=>p[0]));let spanX=Math.max(22,maxLon-minLon+20),spanY=Math.max(17,maxLat-minLat+16);let centerLon=(minLon+maxLon)/2,centerLat=(minLat+maxLat)/2;let scale=Math.min(1040/spanX,520/spanY);scale=Math.min(scale,20);let project=(lat,lon)=>[600+(lon-centerLon)*scale,340-(lat-centerLat)*scale];ctx.fillStyle=dark?'#112a41':'#d9edf3';ctx.fillRect(0,0,1200,720);ctx.strokeStyle=dark?'#29485d':'#bdd7de';ctx.lineWidth=1;for(let lat=-80;lat<=80;lat+=10){let y=project(lat,centerLon)[1];ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1200,y);ctx.stroke()}for(let lon=Math.floor((centerLon-1200/scale)/10)*10;lon<centerLon+1200/scale;lon+=10){let x=project(0,lon)[0];ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,650);ctx.stroke()}
 ctx.fillStyle=dark?'#355d6b':'#a9c8c3';ctx.strokeStyle=dark?'#587c86':'#8cb1ae';ctx.lineWidth=1.4;for(let poly of land){for(let offset=-720;offset<=720;offset+=360){ctx.beginPath();poly.forEach(([lon,lat],i)=>{let [x,y]=project(lat,lon+offset);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.closePath();ctx.fill();ctx.stroke()}}
 ctx.strokeStyle=dark?'#77e8f5':'#007c9a';ctx.lineWidth=5;ctx.setLineDash([12,9]);ctx.lineCap='round';ctx.beginPath();route.forEach(([lat],i)=>{let [x,y]=project(lat,lons[i]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.setLineDash([]);
+drawRoutePlane(routePlanePose(route.map(([lat],i)=>project(lat,lons[i]))),dark);
 for(let [city,pos,lon] of [[f,a,lons[0]],[t,b,lons[lons.length-1]]]){let [x,y]=project(pos[0],lon);ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fillStyle=dark?'#79ebfa':'#0083a4';ctx.fill();ctx.strokeStyle=dark?'#0e263c':'white';ctx.lineWidth=4;ctx.stroke();ctx.font='bold 22px system-ui';ctx.textAlign=x>950?'right':'left';ctx.fillStyle=dark?'#ffffff':'#18394c';ctx.fillText(city.split(',')[0],x>950?x-16:x+16,y-17)}ctx.fillStyle=dark?'#0b1b2b':'#c8e2e7';ctx.fillRect(0,646,1200,74);ctx.textAlign='center';ctx.font='bold 34px system-ui';ctx.fillStyle=dark?'white':'#173b50';ctx.fillText(f.split(',')[0]+'  →  '+t.split(',')[0],600,694);el('status').textContent='Accurate Natural Earth coastlines · Great-circle route · 1200 × 720 PNG · '+cityNames.length.toLocaleString()+' cities available';return true;}
 el('draw').onclick=render;el('theme').onchange=render;el('save').onclick=async()=>{
   if(!render())return;

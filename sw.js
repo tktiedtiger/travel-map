@@ -1,4 +1,4 @@
-const CACHE='travel-route-v4';
+const CACHE='travel-route-v5';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon.svg','./cities-data.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('travel-route-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
